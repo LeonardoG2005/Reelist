@@ -62,7 +62,14 @@ const bcrypt = require("bcryptjs");
 const userSchema = new mongoose.Schema({
   email:  { type: String, required: true },
   username: { type: String, required: true },
-  password: { type: String, required: true }
+  password: { type: String, required: true },
+
+  /* 
+  Se guarda como data URI base64 (data:image/jpeg;base64,....). 
+  El recorte/compresion se hace en el cliente antes de subir :^
+*/
+
+  profilePicture: { type: String, default: "" }
 });
 
 const listSchema = new mongoose.Schema({
@@ -91,6 +98,20 @@ const List = mongoose.model("List", listSchema);
 const Comment = mongoose.model("Comment", commentSchema);
 app.use(async (req, res, next) => {
   await connectDB();
+  next();
+});
+
+// Disponibiliza la foto de perfil del usuario logueado para el nav (layout.pug)
+app.use(async (req, res, next) => {
+  res.locals.avatarUrl = "";
+  if (req.session.userid) {
+    try {
+      const current = await User.findById(req.session.userid).select("profilePicture");
+      res.locals.avatarUrl = (current && current.profilePicture) || "";
+    } catch (error) {
+      res.locals.avatarUrl = "";
+    }
+  }
   next();
 });
 
@@ -225,7 +246,7 @@ async function loadPrimaryData(userid, options = {}) {
 async function getCommentsForItem(itemid, type) {
   return Comment.find({ itemid: String(itemid), type })
     .sort({ createdAt: -1 })
-    .populate("author", "username");
+    .populate("author", "username profilePicture");
 }
 
 app.get("/", function(req, res) {
@@ -373,6 +394,54 @@ app.post("/updatePassword", async function(req, res) {
     } catch (error) {
         console.error("Error updating password:", error);
         res.status(500).send("Internal server error.");
+    }
+});
+
+app.post("/updateProfilePicture", async function(req, res) {
+    if (!req.session.userid) {
+        return res.status(401).json({ success: false, message: "You must be logged in." });
+    }
+
+    const { image } = req.body;
+    if (!image || typeof image !== "string" || !image.startsWith("data:image/")) {
+        return res.status(400).json({ success: false, message: "A valid image is required." });
+    }
+    // ~2MB de imagen ya codificada en base64 (el cliente la comprime antes de enviarla)
+    if (image.length > 2.8 * 1024 * 1024) {
+        return res.status(400).json({ success: false, message: "Image is too large." });
+    }
+
+    try {
+        const user = await User.findById(req.session.userid);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found." });
+        }
+
+        user.profilePicture = image;
+        await user.save();
+
+        return res.status(200).json({
+          success: true,
+          message: "Profile picture updated.",
+          profilePicture: user.profilePicture
+        });
+    } catch (error) {
+        console.error("Error updating profile picture:", error);
+        return res.status(500).json({ success: false, message: "Internal server error." });
+    }
+});
+
+app.post("/removeProfilePicture", async function(req, res) {
+    if (!req.session.userid) {
+        return res.status(401).json({ success: false, message: "You must be logged in." });
+    }
+
+    try {
+        await User.updateOne({ _id: req.session.userid }, { profilePicture: "" });
+        return res.status(200).json({ success: true, message: "Profile picture removed." });
+    } catch (error) {
+        console.error("Error removing profile picture:", error);
+        return res.status(500).json({ success: false, message: "Internal server error." });
     }
 });
 
@@ -561,7 +630,7 @@ app.post("/addComment", async function(req, res) {
             author: req.session.userid,
             text: trimmed
         });
-        await comment.populate("author", "username");
+        await comment.populate("author", "username profilePicture");
 
         return res.status(201).json({
           success: true,
@@ -570,7 +639,11 @@ app.post("/addComment", async function(req, res) {
             _id: comment._id,
             text: comment.text,
             createdAt: comment.createdAt,
-            author: { _id: comment.author._id, username: comment.author.username }
+            author: {
+              _id: comment.author._id,
+              username: comment.author.username,
+              profilePicture: comment.author.profilePicture || ""
+            }
           }
         });
     } catch (error) {

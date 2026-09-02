@@ -3,7 +3,24 @@ extends layout.pug
 block principal
 
     h1(class="account-title") Account
+
     section(class="acountInfo")
+
+        div(class="avatar-section")
+            div(class="avatar-wrap")
+                div#avatarPreview(class="avatar-img", style=user.profilePicture ? `background-image:url(${user.profilePicture})` : "")
+                    if !user.profilePicture
+                        span#avatarInitial(class="avatar-initial")= (user.username || "?").charAt(0).toUpperCase()
+                label(for="avatarInput", class="avatar-edit", title="Change profile picture")
+                    svg(xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
+                        path(stroke="none" d="M0 0h24v24H0z" fill="none")
+                        path(d="M4 7h3l2 -3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1 -1 1h-16a1 1 0 0 1 -1 -1v-11a1 1 0 0 1 1 -1")
+                        circle(cx="12" cy="13" r="3")
+                input#avatarInput(type="file", accept="image/png,image/jpeg,image/webp", hidden=true)
+            p(class="avatar-hint") JPG or PNG, up to 5MB.
+            if user.profilePicture
+                button#removeAvatarBtn(type="button", class="avatar-remove") Remove photo
+
         form(action="/updateAccount", method="POST")
             p Username: #{user.username}
             input(type="text", name="username", id="username", required = false, placeholder="Update your username")
@@ -62,4 +79,81 @@ block principal
             } catch (error) {
                 console.error('Error:', error);
             }
+        }
+
+        function resizeImage(file, maxSize, quality) {
+            return new Promise(function(resolve, reject) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = function() {
+                        let width = img.width;
+                        let height = img.height;
+                        const scale = Math.min(maxSize / width, maxSize / height, 1);
+                        width = Math.round(width * scale);
+                        height = Math.round(height * scale);
+                        const canvas = document.createElement('canvas');
+                        canvas.width = width;
+                        canvas.height = height;
+                        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+                        resolve(canvas.toDataURL('image/jpeg', quality));
+                    };
+                    img.onerror = reject;
+                    img.src = e.target.result;
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        const avatarInput = document.getElementById('avatarInput');
+        if (avatarInput) {
+            avatarInput.addEventListener('change', async function() {
+                const file = this.files[0];
+                if (!file) return;
+                if (!file.type.startsWith('image/')) {
+                    alert('Please choose an image file.');
+                    return;
+                }
+                if (file.size > 5 * 1024 * 1024) {
+                    alert('Image must be smaller than 5MB.');
+                    return;
+                }
+                try {
+                    const dataUrl = await resizeImage(file, 400, 0.85);
+                    const response = await fetch('/updateProfilePicture', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ image: dataUrl })
+                    });
+                    const data = await response.json();
+                    if (response.ok && data.success) {
+                        window.location.reload();
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('Could not update your profile picture.');
+                }
+            });
+        }
+
+        const removeAvatarBtn = document.getElementById('removeAvatarBtn');
+        if (removeAvatarBtn) {
+            removeAvatarBtn.addEventListener('click', async function() {
+                if (!confirm('Remove your profile picture?')) return;
+                try {
+                    const response = await fetch('/removeProfilePicture', { method: 'POST' });
+                    const data = await response.json();
+                    if (response.ok && data.success) {
+                        window.location.reload();
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('Could not remove your profile picture.');
+                }
+            });
         }

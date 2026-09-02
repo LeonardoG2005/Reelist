@@ -53,7 +53,12 @@ block principal
           each comment in comments
             div.comment-item(data-comment-id=comment._id)
               div.comment-meta
-                span.comment-author= comment.author && comment.author.username ? comment.author.username : "Unknown"
+                div.comment-author-info
+                  if comment.author && comment.author.profilePicture
+                    img.comment-avatar(src=comment.author.profilePicture, alt=comment.author.username)
+                  else
+                    span.comment-avatar.comment-avatar-placeholder= comment.author && comment.author.username ? comment.author.username.charAt(0).toUpperCase() : "?"
+                  span.comment-author= comment.author && comment.author.username ? comment.author.username : "Unknown"
                 span.comment-date= new Date(comment.createdAt).toLocaleDateString()
               p.comment-text= comment.text
               if userid && comment.author && String(comment.author._id) === String(userid)

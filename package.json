@@ -1,14 +1,14 @@
 {
-  "name": "a2",
+  "name": "Reelist",
   "version": "1.0.0",
-  "description": "assigment 2 web",
-  "homepage": "https://github.com/IngridRH22/Assigment2#readme",
+  "description": "Reelist web app for movie lists",
+  "homepage": "https://github.com/LeonardoG2005/Reelist#readme",
   "bugs": {
-    "url": "https://github.com/IngridRH22/Assigment2/issues"
+    "url": "https://github.com/LeonardoG2005/Reelist/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/IngridRH22/Assigment2.git"
+    "url": "git+https://github.com/LeonardoG2005/Reelist.git"
   },
   "license": "MIT",
   "author": "IngridRH",
