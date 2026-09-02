@@ -1,7 +1,10 @@
-"# Assigment2" 
-Description
+## Reelist
+
+# Description
+
 This project is a full‑stack web application built using Node.js, Express, MongoDB, and Pug templates.
-It allows users to:
+
+# It allows users to:
 
 Create an account and log in
 
@@ -19,15 +22,11 @@ Navigate through a clean UI with persistent login and dynamic content rendering
 
 The application is deployed on Vercel using serverless functions for backend routes.
 
-Team Members
-Ingrid Rangel Hernández
+# Setup / Run Steps
 
-Santiago Camargo
-
-Setup / Run Steps
 1. Clone the repository
 git clone <your-repo-url>
-cd Assignment2
+cd Reelist
 
 2. Install dependencies
 npm install
