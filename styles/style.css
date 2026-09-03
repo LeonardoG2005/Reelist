@@ -131,6 +131,13 @@ nav a {
     height: 1.35rem;
 }
 
+.account-avatar-img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
 .theme-toggle {
     width: auto;
     min-width: 2.5rem;
@@ -150,6 +157,35 @@ nav a {
 
 .theme-toggle:hover {
     background-color: var(--primario);
+}
+
+.theme-toggle .theme-icon {
+    margin: 0;
+    padding: 0;
+    display: block;
+    width: 1.3rem;
+    height: 1.3rem;
+    opacity: 0.4;
+    transition: opacity 0.2s ease;
+}
+
+/* Sun is the "active" icon in light mode */
+.theme-toggle .theme-icon-sun {
+    color: #fbbf24;
+    opacity: 1;
+}
+
+.theme-toggle .theme-icon-moon {
+    color: var(--acento);
+}
+
+/* Moon becomes the "active" icon in dark mode */
+html.dark .theme-toggle .theme-icon-sun {
+    opacity: 0.4;
+}
+
+html.dark .theme-toggle .theme-icon-moon {
+    opacity: 1;
 }
 
 svg {
@@ -185,6 +221,7 @@ form {
     justify-content: center;
     align-items: center;
     width: 100%;
+    box-sizing: border-box;
 }
 
 input {
@@ -332,6 +369,7 @@ button:hover {
     align-self: center;
     cursor: pointer;
     border: 1px solid rgba(124, 58, 237, 0.35);
+    box-shadow: 0 0 10px #00000080;
     transition: transform 0.2s ease, border-color 0.2s ease;
 }
 
@@ -443,6 +481,7 @@ button:hover {
     border-radius: 0.5rem;
     margin-top: 1rem;
     background-color: var(--panel);
+    box-shadow: 0 0 10px #00000080;
 }
 
 .filters div {
@@ -484,6 +523,7 @@ button:hover {
     border-radius: 0.75rem;
     background-color: var(--panel);
     color: var(--blanco);
+    box-shadow: 0 0 10px #00000080;
 }
 
 .list-sidebar h2,
@@ -837,6 +877,150 @@ button:hover {
     background-color: var(--panel);
 }
 
+/* Comments */
+.comments-section {
+    background-color: transparent;
+    align-items: stretch;
+    color: var(--text);
+    width: min(50rem, 92%);
+    margin: 0 auto 3rem;
+    padding: 0 1rem;
+}
+
+.comments-section h2 {
+    align-self: center;
+    color: var(--primario);
+    font-family: var(--header-font);
+    margin: 2rem 0 1rem;
+}
+
+.comment-form {
+    background-color: var(--panel);
+    color: var(--blanco);
+    border-radius: 0.75rem;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    align-items: stretch;
+    box-shadow: 0 0 10px #00000080;
+}
+
+.comment-form textarea {
+    width: 100%;
+    box-sizing: border-box;
+    resize: vertical;
+    min-height: 4rem;
+    padding: 0.6rem;
+    border-radius: 0.5rem;
+    border: 1px solid rgba(124, 58, 237, 0.35);
+    background-color: var(--input-bg);
+    color: var(--input-text);
+    font-family: var(--body-font);
+    font-weight: normal;
+    margin-bottom: 0.5rem;
+}
+
+.comment-form button {
+    align-self: flex-end;
+    width: auto;
+    min-width: 9rem;
+}
+
+.comment-login-hint {
+    text-align: center;
+    font-weight: normal;
+    margin-bottom: 1.5rem;
+}
+
+.comment-login-hint a {
+    color: var(--acento);
+}
+
+.comment-list {
+    align-items: stretch;
+    gap: 0.75rem;
+}
+
+.comment-item {
+    background-color: var(--panel);
+    color: var(--blanco);
+    border-radius: 0.6rem;
+    padding: 0.85rem 1rem;
+    margin-bottom: 0.75rem;
+    border: 1px solid rgba(124, 58, 237, 0.25);
+    box-shadow: 0 0 10px #00000080;
+}
+
+.comment-meta {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.85rem;
+    margin-bottom: 0.35rem;
+}
+
+.comment-author-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.comment-avatar {
+    width: 1.9rem;
+    height: 1.9rem;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.comment-avatar-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--primario);
+    color: var(--blanco);
+    font-family: var(--header-font);
+    font-size: 0.85rem;
+}
+
+.comment-author {
+    color: var(--acento);
+    font-weight: bold;
+}
+
+.comment-date {
+    opacity: 0.7;
+    font-weight: normal;
+}
+
+.comment-text {
+    font-weight: normal;
+    line-height: 1.5;
+    margin: 0 0 0.5rem;
+    text-align: left;
+}
+
+.comment-delete {
+    display: block;
+    margin-left: auto;
+    width: auto;
+    background-color: transparent;
+    border: 1px solid rgba(220, 38, 38, 0.5);
+    color: #fca5a5;
+    padding: 0.3rem 0.7rem;
+    font-size: 0.8rem;
+}
+
+.comment-delete:hover {
+    background-color: rgba(220, 38, 38, 0.25);
+}
+
+.comment-empty {
+    text-align: center;
+    opacity: 0.8;
+    font-weight: normal;
+}
+
 /* Account Info */
 .account-title {
     text-align: center;
@@ -855,6 +1039,86 @@ button:hover {
     border-radius: 0.5rem;
     margin-bottom: 3rem;
     background-color: var(--panel);
+    box-shadow: 0 0 10px #00000080;
+}
+
+/* Avatar */
+.avatar-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 1.5rem;
+}
+
+.avatar-wrap {
+    position: relative;
+    width: 7rem;
+    height: 7rem;
+}
+
+.avatar-img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background-color: var(--primario);
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid rgba(255, 255, 255, 0.15);
+}
+
+.avatar-initial {
+    font-family: var(--header-font);
+    font-size: 2.5rem;
+    color: var(--blanco);
+}
+
+.avatar-edit {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 2.1rem;
+    height: 2.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background-color: var(--secundario);
+    color: var(--blanco);
+    border: 2px solid var(--panel);
+    cursor: pointer;
+}
+
+.avatar-edit:hover {
+    background-color: var(--acento);
+}
+
+.avatar-edit svg {
+    margin: 0;
+}
+
+.avatar-hint {
+    font-size: 0.75rem;
+    font-weight: normal;
+    opacity: 0.7;
+    margin: 0.75rem 0 0;
+}
+
+.avatar-remove {
+    width: auto;
+    margin-top: 0.5rem;
+    padding: 0.3rem 0.8rem;
+    font-size: 0.8rem;
+    background-color: transparent;
+    border: 1px solid rgba(220, 38, 38, 0.5);
+    color: #fca5a5;
+}
+
+.avatar-remove:hover {
+    background-color: rgba(220, 38, 38, 0.25);
 }
 
 .acountInfo form {
@@ -909,7 +1173,7 @@ footer p {
     font-family: var(--body-font);
     font-weight: normal;
     font-size: 1.2rem;
-    color: var(--terciario);
+    color: var(--blanco);
     margin: 1rem 0 2rem;
 }
 
@@ -1099,4 +1363,4 @@ footer p {
         width: 90%;
     }
 
-}
+    }

@@ -37,6 +37,35 @@ block principal
         p.detail-overview= item.overview || "No overview available."
         a(href="javascript:history.back()", class="back-link") Back
 
+    section.comments-section
+      h2 Comments
+      if userid
+        form#commentForm.comment-form
+          textarea#commentText(name="text", placeholder="Summon the council", rows="3", required=true, maxlength="1000")
+          button(type="submit") Post Comment
+      else
+        p.comment-login-hint
+          a(href="/login") Log in
+          |  to leave a comment.
+
+      div#commentList.comment-list
+        if comments && comments.length
+          each comment in comments
+            div.comment-item(data-comment-id=comment._id)
+              div.comment-meta
+                div.comment-author-info
+                  if comment.author && comment.author.profilePicture
+                    img.comment-avatar(src=comment.author.profilePicture, alt=comment.author.username)
+                  else
+                    span.comment-avatar.comment-avatar-placeholder= comment.author && comment.author.username ? comment.author.username.charAt(0).toUpperCase() : "?"
+                  span.comment-author= comment.author && comment.author.username ? comment.author.username : "Unknown"
+                span.comment-date= new Date(comment.createdAt).toLocaleDateString()
+              p.comment-text= comment.text
+              if userid && comment.author && String(comment.author._id) === String(userid)
+                button.comment-delete(type="button", onclick=`deleteComment('${comment._id}')`) Delete
+        else
+          p.comment-empty No comments yet :^
+
   div#listModal.modal(hidden)
     div.modal-backdrop(onclick="closeAddModal()")
     div.modal-panel
@@ -54,6 +83,8 @@ block principal
     script.
       let pendingItem = null;
       let selectedListId = null;
+      const currentItemId = !{JSON.stringify(String(item.id))};
+      const currentMediaType = !{JSON.stringify(mediaKind)};
 
       async function openAddModal(id, mediaType) {
         pendingItem = { id, mediaType };
@@ -140,3 +171,47 @@ block principal
           document.querySelectorAll('.list-option').forEach(b => b.classList.remove('selected'));
         }
       });
+
+      const commentForm = document.getElementById('commentForm');
+      if (commentForm) {
+        commentForm.addEventListener('submit', async function(event) {
+          event.preventDefault();
+          const text = document.getElementById('commentText').value;
+          try {
+            const response = await fetch('/addComment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ itemId: currentItemId, mediaType: currentMediaType, text: text })
+            });
+            const data = await response.json();
+            if (response.ok && data.success) {
+              window.location.reload();
+            } else {
+              alert("Error: " + data.message);
+            }
+          } catch (error) {
+            console.error("Network error:", error);
+            alert("Could not connect to the server.");
+          }
+        });
+      }
+
+      async function deleteComment(id) {
+        if (!confirm("Delete this comment?")) return;
+        try {
+          const response = await fetch('/deleteComment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ commentId: id })
+          });
+          const data = await response.json();
+          if (response.ok && data.success) {
+            window.location.reload();
+          } else {
+            alert("Error: " + data.message);
+          }
+        } catch (error) {
+          console.error("Network error:", error);
+          alert("Could not connect to the server.");
+        }
+      }

@@ -62,7 +62,14 @@ const bcrypt = require("bcryptjs");
 const userSchema = new mongoose.Schema({
   email:  { type: String, required: true },
   username: { type: String, required: true },
-  password: { type: String, required: true }
+  password: { type: String, required: true },
+
+  /* 
+  Se guarda como data URI base64 (data:image/jpeg;base64,....). 
+  El recorte/compresion se hace en el cliente antes de subir :^
+*/
+
+  profilePicture: { type: String, default: "" }
 });
 
 const listSchema = new mongoose.Schema({
@@ -78,10 +85,33 @@ const listSchema = new mongoose.Schema({
   }]
 });
 
+const commentSchema = new mongoose.Schema({
+  itemid: { type: String, required: true },
+  type: { type: String, required: true },
+  author: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  text: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now }
+});
+
 const User = mongoose.model("User", userSchema);
 const List = mongoose.model("List", listSchema);
+const Comment = mongoose.model("Comment", commentSchema);
 app.use(async (req, res, next) => {
   await connectDB();
+  next();
+});
+
+// Disponibiliza la foto de perfil del usuario logueado para el nav (layout.pug)
+app.use(async (req, res, next) => {
+  res.locals.avatarUrl = "";
+  if (req.session.userid) {
+    try {
+      const current = await User.findById(req.session.userid).select("profilePicture");
+      res.locals.avatarUrl = (current && current.profilePicture) || "";
+    } catch (error) {
+      res.locals.avatarUrl = "";
+    }
+  }
   next();
 });
 
@@ -211,6 +241,12 @@ async function loadPrimaryData(userid, options = {}) {
     mediaType: mediaTypes,
     genres: genreIds
   };
+}
+
+async function getCommentsForItem(itemid, type) {
+  return Comment.find({ itemid: String(itemid), type })
+    .sort({ createdAt: -1 })
+    .populate("author", "username profilePicture");
 }
 
 app.get("/", function(req, res) {
@@ -358,6 +394,54 @@ app.post("/updatePassword", async function(req, res) {
     } catch (error) {
         console.error("Error updating password:", error);
         res.status(500).send("Internal server error.");
+    }
+});
+
+app.post("/updateProfilePicture", async function(req, res) {
+    if (!req.session.userid) {
+        return res.status(401).json({ success: false, message: "You must be logged in." });
+    }
+
+    const { image } = req.body;
+    if (!image || typeof image !== "string" || !image.startsWith("data:image/")) {
+        return res.status(400).json({ success: false, message: "A valid image is required." });
+    }
+    // ~2MB de imagen ya codificada en base64 (el cliente la comprime antes de enviarla)
+    if (image.length > 2.8 * 1024 * 1024) {
+        return res.status(400).json({ success: false, message: "Image is too large." });
+    }
+
+    try {
+        const user = await User.findById(req.session.userid);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found." });
+        }
+
+        user.profilePicture = image;
+        await user.save();
+
+        return res.status(200).json({
+          success: true,
+          message: "Profile picture updated.",
+          profilePicture: user.profilePicture
+        });
+    } catch (error) {
+        console.error("Error updating profile picture:", error);
+        return res.status(500).json({ success: false, message: "Internal server error." });
+    }
+});
+
+app.post("/removeProfilePicture", async function(req, res) {
+    if (!req.session.userid) {
+        return res.status(401).json({ success: false, message: "You must be logged in." });
+    }
+
+    try {
+        await User.updateOne({ _id: req.session.userid }, { profilePicture: "" });
+        return res.status(200).json({ success: true, message: "Profile picture removed." });
+    } catch (error) {
+        console.error("Error removing profile picture:", error);
+        return res.status(500).json({ success: false, message: "Internal server error." });
     }
 });
 
@@ -521,6 +605,80 @@ app.post("/rateItem", async function(req, res) {
     }
 });
 
+app.post("/addComment", async function(req, res) {
+    if (!req.session.userid) {
+        return res.status(401).json({ success: false, message: "You must be logged in to comment." });
+    }
+
+    const { itemId, mediaType, text } = req.body;
+    const trimmed = (text || "").trim();
+
+    if (!itemId || !mediaType) {
+        return res.status(400).json({ success: false, message: "Item id and type are required." });
+    }
+    if (!trimmed) {
+        return res.status(400).json({ success: false, message: "Comment can't be empty." });
+    }
+    if (trimmed.length > 1000) {
+        return res.status(400).json({ success: false, message: "Comment is too long." });
+    }
+
+    try {
+        const comment = await Comment.create({
+            itemid: String(itemId),
+            type: mediaType,
+            author: req.session.userid,
+            text: trimmed
+        });
+        await comment.populate("author", "username profilePicture");
+
+        return res.status(201).json({
+          success: true,
+          message: "Comment added.",
+          comment: {
+            _id: comment._id,
+            text: comment.text,
+            createdAt: comment.createdAt,
+            author: {
+              _id: comment.author._id,
+              username: comment.author.username,
+              profilePicture: comment.author.profilePicture || ""
+            }
+          }
+        });
+    } catch (error) {
+        console.error("Error adding comment:", error);
+        return res.status(500).json({ success: false, message: "Internal server error." });
+    }
+});
+
+app.post("/deleteComment", async function(req, res) {
+    if (!req.session.userid) {
+        return res.status(401).json({ success: false, message: "You must be logged in." });
+    }
+
+    const { commentId } = req.body;
+    if (!commentId) {
+        return res.status(400).json({ success: false, message: "Comment id is required." });
+    }
+
+    try {
+        const comment = await Comment.findById(commentId);
+        if (!comment) {
+            return res.status(404).json({ success: false, message: "Comment not found." });
+        }
+        if (String(comment.author) !== String(req.session.userid)) {
+            return res.status(403).json({ success: false, message: "You can only delete your own comments." });
+        }
+
+        await Comment.deleteOne({ _id: commentId });
+        return res.status(200).json({ success: true, message: "Comment deleted." });
+    } catch (error) {
+        console.error("Error deleting comment:", error);
+        return res.status(500).json({ success: false, message: "Internal server error." });
+    }
+});
+
 app.post("/newList", async function(req, res) {
     if (!req.session.userid) {
         return res.redirect("/login");
@@ -652,7 +810,8 @@ app.get("/movie/:id", async function(req, res) {
     if (!item || item.success === false) {
         return res.status(404).send("Movie not found.");
     }
-    res.render("detail", { userid: req.session.userid, item, mediaKind: "movie" });
+    const comments = await getCommentsForItem(req.params.id, "movie");
+    res.render("detail", { userid: req.session.userid, item, mediaKind: "movie", comments });
 });
 
 app.get("/tv/:id", async function(req, res) {
@@ -660,7 +819,8 @@ app.get("/tv/:id", async function(req, res) {
     if (!item || item.success === false) {
         return res.status(404).send("TV show not found.");
     }
-    res.render("detail", { userid: req.session.userid, item, mediaKind: "tv" });
+    const comments = await getCommentsForItem(req.params.id, "tv");
+    res.render("detail", { userid: req.session.userid, item, mediaKind: "tv", comments });
 });
 
 app.get("/signup", function(req, res) {
