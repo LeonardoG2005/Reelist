@@ -1,11 +1,5 @@
 /*
- * Reelist - pantalla de carga reutilizable.
- *
- * Uso:
- *   const html = await Loader.run(contenedor, () => fetch(url).then(r => r.text()));
- *   contenedor.innerHTML = html;
- *
- * Estrategia:
+ * Estrategia del loader explicada :D 
  *  - showDelay:   ms que se espera antes de mostrar el loader. Con 0 se muestra al instante;
  *                 con >0 una carga rapida nunca lo muestra (util para recargas tras una accion).
  *  - minDuration: una vez visible, se queda al menos estos ms (evita el parpadeo).
@@ -14,7 +8,7 @@
  * Los gifs se toman al azar de styles/assets/loaders (lista inyectada por el servidor).
  */
 (function () {
-  var DEFAULTS = { text: "Loading...", minDuration: 400, showDelay: 0 };
+  var DEFAULTS = { text: "Loading...", minDuration: 300, showDelay: 0 };
 
   var gifs = [];
   try {
@@ -29,7 +23,7 @@
 
   function pickGif() {
     if (!gifs.length) return null;
-    // evita repetir el gif anterior cuando hay mas de uno
+    // Esto es para evitar repetir el gif anterior cuando hay mas de uno
     var pool = gifs.length > 1 ? gifs.filter(function (g) { return g !== lastGif; }) : gifs;
     return pool[Math.floor(Math.random() * pool.length)];
   }
