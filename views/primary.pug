@@ -31,32 +31,7 @@ block principal
 
       div(class="items")
         h2= listName || "My List"
-        if !items || items.length === 0
-          p No items in your list.
-        else
-          each item in items
-            if item.type === "movie"
-              div(class="movie" onclick=`window.location.href='/movie/${item.id}'`)
-                img(src="https://image.tmdb.org/t/p/w500" + item.poster_path, alt=item.title)
-                h2= item.title
-                p= item.overview
-                div(class="item-actions" onclick="event.stopPropagation()")
-                  div(class="star-rating" data-id=item.id)
-                    span.star-label Want to watch
-                    each s in [1, 2, 3, 4, 5]
-                      button(type="button", class=(item.wantStars || 0) >= s ? "star filled" : "star", onclick=`rateItem('${item.id}', ${s})`, aria-label=`${s} stars`)= "★"
-                  button(type="button", class="remove-btn", onclick=`removeMoviefromList('${item.id}')`) Remove
-            else if item.type === "tv"
-              div(class="tv" onclick=`window.location.href='/tv/${item.id}'`)
-                img(src="https://image.tmdb.org/t/p/w500" + item.poster_path, alt=item.name)
-                h2= item.name
-                p= item.overview
-                div(class="item-actions" onclick="event.stopPropagation()")
-                  div(class="star-rating" data-id=item.id)
-                    span.star-label Want to watch
-                    each s in [1, 2, 3, 4, 5]
-                      button(type="button", class=(item.wantStars || 0) >= s ? "star filled" : "star", onclick=`rateItem('${item.id}', ${s})`, aria-label=`${s} stars`)= "★"
-                  button(type="button", class="remove-btn", onclick=`removeMoviefromList('${item.id}')`) Remove
+        div#itemsResults(data-media-types=JSON.stringify(mediaType || []), data-genres=JSON.stringify(genres || []))
         button(type="button", class="add-items-btn", onclick="window.location.href='/search'") Add Items
 
       section(class="filters")
@@ -111,6 +86,32 @@ block principal
 
     script.
       const currentListId = !{JSON.stringify(listId ? String(listId) : null)};
+      const itemsContainer = document.getElementById('itemsResults');
+
+      function buildItemsUrl() {
+        const params = new URLSearchParams();
+        if (currentListId) params.set('listId', currentListId);
+        JSON.parse(itemsContainer.dataset.mediaTypes || '[]').forEach(v => params.append('mediaType', v));
+        JSON.parse(itemsContainer.dataset.genres || '[]').forEach(v => params.append('genres', v));
+        return '/primary/items?' + params.toString();
+      }
+
+      async function loadItems(options) {
+        try {
+          const html = await Loader.run(itemsContainer, async () => {
+            const response = await fetch(buildItemsUrl(), { headers: { Accept: 'text/html' } });
+            if (!response.ok) throw new Error('Request failed: ' + response.status);
+            return response.text();
+          }, options);
+          itemsContainer.innerHTML = html;
+        } catch (error) {
+          console.error(error);
+          Loader.showError(itemsContainer, 'Could not load your list.', () => loadItems(options));
+        }
+      }
+
+      // Tras rate/remove: el loader solo aparece si la recarga tarda (>200ms) y entonces dura minimo 400ms
+      const refreshLoader = { showDelay: 200, minDuration: 400 };
 
       async function deleteList(id, isOwner) {
         const message = isOwner
@@ -144,7 +145,7 @@ block principal
           });
           const data = await response.json();
           if (response.ok && data.success) {
-            window.location.reload();
+            loadItems(refreshLoader);
           } else {
             alert("Error: " + data.message);
           }
@@ -163,7 +164,7 @@ block principal
           });
           const data = await response.json();
           if (response.ok && data.success) {
-            window.location.reload();
+            loadItems(refreshLoader);
           } else {
             alert("Error: " + data.message);
           }
@@ -196,3 +197,5 @@ block principal
           }
         });
       }
+
+      loadItems();

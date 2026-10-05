@@ -4,6 +4,7 @@ const express = require("express");
 const session = require("express-session");
 const app = express();
 const path = require("path");
+const fs = require("fs");
 
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
@@ -115,6 +116,24 @@ app.use(async (req, res, next) => {
   next();
 });
 
+// Se hace un sorteo con los gifs que estan en styles/assets/loaders c: 
+const LOADERS_DIR = path.join(__dirname, "./styles/assets/loaders");
+function getLoaderGifs() {
+  try {
+    return fs.readdirSync(LOADERS_DIR)
+      .filter(file => /\.(gif|webp)$/i.test(file))
+      .map(file => "/assets/loaders/" + encodeURIComponent(file));
+  } catch (error) {
+    return [];
+  }
+}
+
+app.use((req, res, next) => {
+  // "<" escapado para poder incrustar el JSON dentro de un <script> sin riesgos
+  res.locals.loaderGifsJson = JSON.stringify(getLoaderGifs()).replace(/</g, "\\u003c");
+  next();
+});
+
 function toArray(value) {
   if (value === undefined || value === null || value === "") return [];
   return Array.isArray(value) ? value : [value];
@@ -193,6 +212,18 @@ function filterItems(items, mediaTypes, genreIds) {
   });
 }
 
+async function loadListItems(list, mediaTypes, genreIds) {
+  let items = await Promise.all(list.items.map(async (listItem) => {
+    const data = await idToItem(listItem.itemid, listItem.type);
+    if (!data) return null;
+    data.wantStars = listItem.wantStars || 0;
+    return data;
+  }));
+  items = filterItems(items.filter(Boolean), mediaTypes, genreIds);
+  items.sort((a, b) => (b.wantStars || 0) - (a.wantStars || 0));
+  return items;
+}
+
 async function loadPrimaryData(userid, options = {}) {
   const mediaTypes = toArray(options.mediaType);
   const genreIds = toArray(options.genres);
@@ -212,14 +243,11 @@ async function loadPrimaryData(userid, options = {}) {
   let items = [];
   let members = [];
   if (selectedList) {
-    items = await Promise.all(selectedList.items.map(async (listItem) => {
-      const data = await idToItem(listItem.itemid, listItem.type);
-      if (!data) return null;
-      data.wantStars = listItem.wantStars || 0;
-      return data;
-    }));
-    items = filterItems(items.filter(Boolean), mediaTypes, genreIds);
-    items.sort((a, b) => (b.wantStars || 0) - (a.wantStars || 0));
+    // Esto es para que la pagina /primary haga primero el "shell" (listas, miembros)
+    // y que luego pida los items aparte (/primary/items) mientras muestra el loader c:
+    if (!options.skipItems) {
+      items = await loadListItems(selectedList, mediaTypes, genreIds);
+    }
 
     const memberIds = new Set();
     if (selectedList.owner) memberIds.add(String(selectedList.owner));
@@ -258,7 +286,7 @@ app.post("/login", async function (req, res) {
     if (userf != null) {
         if (await bcrypt.compare(req.body.password, userf.password)) {
             req.session.userid = userf._id;
-            const data = await loadPrimaryData(req.session.userid);
+            const data = await loadPrimaryData(req.session.userid, { skipItems: true });
             res.render("primary", data);
         } else {
             res.render("login", { error: "Incorrect password.", username: req.body.username });
@@ -315,7 +343,7 @@ app.post("/signup", async function(req, res) {
             listName: "Personal List",
             items: []
         });
-        const data = await loadPrimaryData(req.session.userid);
+        const data = await loadPrimaryData(req.session.userid, { skipItems: true });
         res.render("primary", data);
     }
 });
@@ -788,7 +816,8 @@ app.post("/primary", async function(req, res) {
     const data = await loadPrimaryData(req.session.userid, {
       listId: req.body.listId,
       mediaType: req.body.mediaType,
-      genres: req.body.genres
+      genres: req.body.genres,
+      skipItems: true
     });
     res.render("primary", data);
 });
@@ -800,9 +829,28 @@ app.get("/primary", async function(req, res) {
     const data = await loadPrimaryData(req.session.userid, {
       listId: req.query.listId,
       mediaType: req.query.mediaType,
-      genres: req.query.genres
+      genres: req.query.genres,
+      skipItems: true
     });
     res.render("primary", data);
+});
+
+// Fragmento HTML con los items de la lista. Lo pide el cliente mientras muestra el loader.
+app.get("/primary/items", async function(req, res) {
+    if (!req.session.userid) {
+        return res.status(401).send("You must be logged in.");
+    }
+    try {
+        const data = await loadPrimaryData(req.session.userid, {
+          listId: req.query.listId,
+          mediaType: req.query.mediaType,
+          genres: req.query.genres
+        });
+        res.render("partials/primary-items", data);
+    } catch (error) {
+        console.error("Error loading list items:", error);
+        res.status(500).send("Could not load the list items.");
+    }
 });
 
 app.get("/movie/:id", async function(req, res) {
