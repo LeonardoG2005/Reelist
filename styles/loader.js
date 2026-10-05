@@ -14,7 +14,7 @@
  * Los gifs se toman al azar de styles/assets/loaders (lista inyectada por el servidor).
  */
 (function () {
-  var DEFAULTS = { text: "Loading...", minDuration: 500, showDelay: 0 };
+  var DEFAULTS = { text: "Loading...", minDuration: 400, showDelay: 0 };
 
   var gifs = [];
   try {

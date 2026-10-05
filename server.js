@@ -255,7 +255,9 @@ async function loadPrimaryData(userid, options = {}) {
     if (selectedList.userids && selectedList.userids.userid) {
       memberIds.add(String(selectedList.userids.userid));
     }
-    members = await User.find({ _id: { $in: Array.from(memberIds) } }).select("username email");
+    if (!options.skipMembers) {
+      members = await User.find({ _id: { $in: Array.from(memberIds) } }).select("username email");
+    }
   }
 
   return {
@@ -844,7 +846,8 @@ app.get("/primary/items", async function(req, res) {
         const data = await loadPrimaryData(req.session.userid, {
           listId: req.query.listId,
           mediaType: req.query.mediaType,
-          genres: req.query.genres
+          genres: req.query.genres,
+          skipMembers: true
         });
         res.render("partials/primary-items", data);
     } catch (error) {
@@ -931,13 +934,32 @@ function checkPassword(password, confirmPassword,req) {
    return errores;
 }
 
+// Cache en memoria de los detalles de TMDB: cambian muy poco y se piden una vez por item
+// cada vez que se abre o se cambia de lista. Se devuelve una COPIA porque quien llama
+// le agrega campos propios (wantStars) y no deben contaminar lo guardado.
+const ITEM_CACHE_TTL = 10 * 60 * 1000; // 10 minutos
+const ITEM_CACHE_MAX = 500;
+const itemCache = new Map();
+
 async function idToItem(id, type) {
+    const key = type + ":" + id;
+    const cached = itemCache.get(key);
+    if (cached && cached.expires > Date.now()) {
+        return { ...cached.data };
+    }
     try {
         const url = `${urldefault}/${type}/${id}?language=en-US`;
         const response = await fetch(url, tmdbOptions);
         const data = await response.json();
         data.type = type;
-        return data;
+        // solo se deben guardar respuestas buenas (nunca errores de TMDB)
+        if (response.ok && data.success !== false) {
+            if (itemCache.size >= ITEM_CACHE_MAX) {
+                itemCache.delete(itemCache.keys().next().value);
+            }
+            itemCache.set(key, { data, expires: Date.now() + ITEM_CACHE_TTL });
+        }
+        return { ...data };
     } catch (error) {
         console.error("Error fetching item by ID:", error);
         return null;
