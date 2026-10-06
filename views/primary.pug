@@ -31,7 +31,33 @@ block principal
 
       div(class="items")
         h2= listName || "My List"
-        div#itemsResults(data-media-types=JSON.stringify(mediaType || []), data-genres=JSON.stringify(genres || []))
+        div#itemsResults
+          if !items || items.length === 0
+            p No items in your list.
+          else
+            each item in items
+              if item.type === "movie"
+                div(class="movie" onclick=`window.location.href='/movie/${item.id}'`)
+                  img(src="https://image.tmdb.org/t/p/w500" + item.poster_path, alt=item.title)
+                  h2= item.title
+                  p= item.overview
+                  div(class="item-actions" onclick="event.stopPropagation()")
+                    div(class="star-rating" data-id=item.id)
+                      span.star-label Want to watch
+                      each s in [1, 2, 3, 4, 5]
+                        button(type="button", class=(item.wantStars || 0) >= s ? "star filled" : "star", onclick=`rateItem('${item.id}', ${s})`, aria-label=`${s} stars`)= "★"
+                    button(type="button", class="remove-btn", onclick=`removeMoviefromList('${item.id}')`) Remove
+              else if item.type === "tv"
+                div(class="tv" onclick=`window.location.href='/tv/${item.id}'`)
+                  img(src="https://image.tmdb.org/t/p/w500" + item.poster_path, alt=item.name)
+                  h2= item.name
+                  p= item.overview
+                  div(class="item-actions" onclick="event.stopPropagation()")
+                    div(class="star-rating" data-id=item.id)
+                      span.star-label Want to watch
+                      each s in [1, 2, 3, 4, 5]
+                        button(type="button", class=(item.wantStars || 0) >= s ? "star filled" : "star", onclick=`rateItem('${item.id}', ${s})`, aria-label=`${s} stars`)= "★"
+                    button(type="button", class="remove-btn", onclick=`removeMoviefromList('${item.id}')`) Remove
         button(type="button", class="add-items-btn", onclick="window.location.href='/search'") Add Items
 
       section(class="filters")
@@ -86,32 +112,43 @@ block principal
 
     script.
       const currentListId = !{JSON.stringify(listId ? String(listId) : null)};
+
+      // Loader mientras llega la pagina nueva (cambiar de lista / aplicar filtros).
+      // Sigue siendo una navegacion normal: el servidor responde con la lista ya armada,
+      // igual que antes. Solo si tarda mas de ~150ms se cambia el contenido por el loader.
       const itemsContainer = document.getElementById('itemsResults');
 
-      function buildItemsUrl() {
-        const params = new URLSearchParams();
-        if (currentListId) params.set('listId', currentListId);
-        JSON.parse(itemsContainer.dataset.mediaTypes || '[]').forEach(v => params.append('mediaType', v));
-        JSON.parse(itemsContainer.dataset.genres || '[]').forEach(v => params.append('genres', v));
-        return '/primary/items?' + params.toString();
-      }
+      document.addEventListener('click', function (event) {
+        const link = event.target.closest ? event.target.closest('a.list-btn') : null;
+        if (!link || link.classList.contains('create')) return;
+        if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
 
-      async function loadItems(options) {
-        try {
-          const html = await Loader.run(itemsContainer, async () => {
-            const response = await fetch(buildItemsUrl(), { headers: { Accept: 'text/html' } });
-            if (!response.ok) throw new Error('Request failed: ' + response.status);
-            return response.text();
-          }, options);
-          itemsContainer.innerHTML = html;
-        } catch (error) {
-          console.error(error);
-          Loader.showError(itemsContainer, 'Could not load your list.', () => loadItems(options));
-        }
-      }
+        // Feedback inmediato: nombre y lista activa cambian al instante
+        const title = document.querySelector('.items > h2');
+        const previousTitle = title.textContent;
+        const previousActive = document.querySelector('.list-sidebar .list-btn.active');
+        const delay = 150;
+        const timer = setTimeout(function () {
+          title.textContent = link.textContent;
+          document.querySelectorAll('.list-sidebar .list-btn').forEach(function (b) { b.classList.remove('active'); });
+          link.classList.add('active');
+        }, delay);
+        Loader.showWhileNavigating(itemsContainer, {
+          showDelay: delay,
+          onRestore: function () {
+            clearTimeout(timer);
+            title.textContent = previousTitle;
+            link.classList.remove('active');
+            if (previousActive) previousActive.classList.add('active');
+          }
+        });
+      });
 
-      // Tras rate/remove: el loader solo aparece si la recarga tarda (>200ms) y entonces dura minimo 400ms
-      const refreshLoader = { showDelay: 200, minDuration: 400 };
+      document.addEventListener('submit', function (event) {
+        const form = event.target;
+        if (event.defaultPrevented || !form.matches || !form.matches('form[action="/primary"]')) return;
+        Loader.showWhileNavigating(itemsContainer);
+      });
 
       async function deleteList(id, isOwner) {
         const message = isOwner
@@ -145,7 +182,7 @@ block principal
           });
           const data = await response.json();
           if (response.ok && data.success) {
-            loadItems(refreshLoader);
+            window.location.reload();
           } else {
             alert("Error: " + data.message);
           }
@@ -164,7 +201,7 @@ block principal
           });
           const data = await response.json();
           if (response.ok && data.success) {
-            loadItems(refreshLoader);
+            window.location.reload();
           } else {
             alert("Error: " + data.message);
           }
@@ -197,5 +234,3 @@ block principal
           }
         });
       }
-
-      loadItems();
