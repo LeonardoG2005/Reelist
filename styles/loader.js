@@ -8,7 +8,7 @@
  * Los gifs se toman al azar de styles/assets/loaders (lista inyectada por el servidor).
  */
 (function () {
-  var DEFAULTS = { text: "Loading...", minDuration: 300, showDelay: 0 };
+  var DEFAULTS = { text: "Loading...", minDuration: 500, showDelay: 0 };
 
   var gifs = [];
   try {
@@ -18,28 +18,10 @@
     gifs = [];
   }
 
-  var lastGif = null;
-  var nextGif = null;
-
+  // Un gif al azar y ya (puede salir el mismo dos veces seguidas, es parte del azar)
   function pickGif() {
     if (!gifs.length) return null;
-    // Esto es para evitar repetir el gif anterior cuando hay mas de uno
-    var pool = gifs.length > 1 ? gifs.filter(function (g) { return g !== lastGif; }) : gifs;
-    return pool[Math.floor(Math.random() * pool.length)];
-  }
-
-  function preload(src) {
-    if (!src) return;
-    var img = new Image();
-    img.src = src;
-  }
-
-  function takeGif() {
-    var gif = nextGif || pickGif();
-    lastGif = gif;
-    nextGif = pickGif();
-    preload(nextGif); // el siguiente ya queda en cache
-    return gif;
+    return gifs[Math.floor(Math.random() * gifs.length)];
   }
 
   function build(text) {
@@ -48,7 +30,7 @@
     box.setAttribute("role", "status");
     box.setAttribute("aria-live", "polite");
 
-    var src = takeGif();
+    var src = pickGif();
     if (src) {
       var img = document.createElement("img");
       img.className = "loader-gif";
@@ -103,6 +85,40 @@
     }
   }
 
+  /*
+   * Para navegaciones normales (un enlace o un formulario que recarga la pagina):
+   * pone el loader en el contenedor si la pagina nueva tarda mas de showDelay ms.
+   * No hace falta quitarlo: al llegar la pagina nueva, la actual desaparece.
+   * Devuelve restore() por si la navegacion se cancela o se vuelve con "Atras"
+   * (el navegador puede restaurar esta pagina tal cual, con el loader puesto).
+   */
+  function showWhileNavigating(container, options) {
+    var o = Object.assign({}, DEFAULTS, { showDelay: 150 }, options);
+    var original = Array.prototype.slice.call(container.childNodes);
+    var timer = setTimeout(function () {
+      container.replaceChildren(build(o.text));
+      container.setAttribute("aria-busy", "true");
+    }, o.showDelay);
+    var failsafe = null;
+
+    function restore() {
+      clearTimeout(timer);
+      clearTimeout(failsafe);
+      container.replaceChildren.apply(container, original);
+      container.removeAttribute("aria-busy");
+      if (typeof o.onRestore === "function") o.onRestore();
+    }
+
+    function onPageShow(event) {
+      if (!event.persisted) return;
+      window.removeEventListener("pageshow", onPageShow);
+      restore();
+    }
+    window.addEventListener("pageshow", onPageShow);
+    failsafe = setTimeout(restore, 20000); // navegacion cancelada (Esc / parar): no dejar el loader pegado
+    return restore;
+  }
+
   function showError(container, message, onRetry) {
     var box = document.createElement("div");
     box.className = "loader loader-error";
@@ -123,5 +139,5 @@
     container.replaceChildren(box);
   }
 
-  window.Loader = { run: run, showError: showError, preload: function () { nextGif = nextGif || pickGif(); preload(nextGif); }, defaults: DEFAULTS };
+  window.Loader = { run: run, showWhileNavigating: showWhileNavigating, showError: showError, defaults: DEFAULTS };
 })();
