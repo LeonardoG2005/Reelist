@@ -115,7 +115,7 @@ block principal
 
       // Loader mientras llega la pagina nueva (cambiar de lista / aplicar filtros).
       // Sigue siendo una navegacion normal: el servidor responde con la lista ya armada,
-      // igual que antes. Solo si tarda mas de ~150ms se cambia el contenido por el loader.
+      // igual que antes. Solo si tarda mas de ~400ms (y el gif ya esta listo) se cambia el contenido por el loader.
       const itemsContainer = document.getElementById('itemsResults');
 
       document.addEventListener('click', function (event) {
@@ -123,25 +123,7 @@ block principal
         if (!link || link.classList.contains('create')) return;
         if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
 
-        // Feedback inmediato: nombre y lista activa cambian al instante
-        const title = document.querySelector('.items > h2');
-        const previousTitle = title.textContent;
-        const previousActive = document.querySelector('.list-sidebar .list-btn.active');
-        const delay = 150;
-        const timer = setTimeout(function () {
-          title.textContent = link.textContent;
-          document.querySelectorAll('.list-sidebar .list-btn').forEach(function (b) { b.classList.remove('active'); });
-          link.classList.add('active');
-        }, delay);
-        Loader.showWhileNavigating(itemsContainer, {
-          showDelay: delay,
-          onRestore: function () {
-            clearTimeout(timer);
-            title.textContent = previousTitle;
-            link.classList.remove('active');
-            if (previousActive) previousActive.classList.add('active');
-          }
-        });
+        Loader.showWhileNavigating(itemsContainer);
       });
 
       document.addEventListener('submit', function (event) {

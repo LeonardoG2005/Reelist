@@ -24,13 +24,13 @@
     return gifs[Math.floor(Math.random() * gifs.length)];
   }
 
-  function build(text) {
+  function build(text, forcedSrc) {
     var box = document.createElement("div");
     box.className = "loader";
     box.setAttribute("role", "status");
     box.setAttribute("aria-live", "polite");
 
-    var src = pickGif();
+    var src = forcedSrc !== undefined ? forcedSrc : pickGif();
     if (src) {
       var img = document.createElement("img");
       img.className = "loader-gif";
@@ -87,21 +87,42 @@
 
   /*
    * Para navegaciones normales (un enlace o un formulario que recarga la pagina):
-   * pone el loader en el contenedor si la pagina nueva tarda mas de showDelay ms.
+   * pone el loader en el contenedor si la pagina nueva tarda mas de showDelay ms
+   * Y ADEMAS su gif ya termino de descargarse (asi nunca se ve un hueco vacio ni un
+   * "Loading..." sin gif; si el gif falla, simplemente no se muestra el loader).
    * No hace falta quitarlo: al llegar la pagina nueva, la actual desaparece.
    * Devuelve restore() por si la navegacion se cancela o se vuelve con "Atras"
    * (el navegador puede restaurar esta pagina tal cual, con el loader puesto).
    */
   function showWhileNavigating(container, options) {
-    var o = Object.assign({}, DEFAULTS, { showDelay: 150 }, options);
+    var o = Object.assign({}, DEFAULTS, { showDelay: 400 }, options);
     var original = Array.prototype.slice.call(container.childNodes);
-    var timer = setTimeout(function () {
-      container.replaceChildren(build(o.text));
-      container.setAttribute("aria-busy", "true");
-    }, o.showDelay);
+    var src = pickGif();
+    var delayElapsed = false;
+    var gifReady = !src; // sin gifs en la carpeta se muestra solo el texto
+    var cancelled = false;
+    var shown = false;
+    var timer = null;
     var failsafe = null;
 
+    function tryShow() {
+      if (shown || cancelled || !delayElapsed || !gifReady) return;
+      shown = true;
+      container.replaceChildren(build(o.text, src));
+      container.setAttribute("aria-busy", "true");
+    }
+
+    // el gif se empieza a bajar desde el clic, en paralelo a la navegacion
+    if (src) {
+      var probe = new Image();
+      probe.onload = function () { gifReady = true; tryShow(); };
+      probe.onerror = function () { cancelled = true; };
+      probe.src = src;
+    }
+    timer = setTimeout(function () { delayElapsed = true; tryShow(); }, o.showDelay);
+
     function restore() {
+      cancelled = true;
       clearTimeout(timer);
       clearTimeout(failsafe);
       container.replaceChildren.apply(container, original);

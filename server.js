@@ -28,6 +28,10 @@ app.use(session({
 }));
 
 
+// Los gifs del loader casi nunca cambian: el navegador los reutiliza 7 dias sin volver a pedirlos.
+// (si cambias un gif, ponle otro nombre de archivo). Solo /assets: style.css sigue sin cache largo.
+app.use("/assets", express.static(path.join(__dirname, "./styles/assets"), { maxAge: "7d" }));
+
 //Pa vecel
 app.use(express.static(path.join(__dirname, "./styles")));
 app.set("views", path.join(__dirname, "./views"));
