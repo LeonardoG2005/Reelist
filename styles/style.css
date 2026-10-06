@@ -1364,3 +1364,48 @@ footer p {
     }
 
     }
+
+
+/* Loader (pantalla de carga reutilizable en loader.js) */
+:root {
+	--loader-gif-height: 168px;
+	--loader-text-size: 1.6rem;
+}
+
+/* Los contenedores del loader no alteran el layout de .search / .items */
+#searchResults,
+#itemsResults {
+	display: contents;
+}
+
+.loader {
+	grid-column: 1 / -1;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	width: 100%;
+	min-height: 14rem;
+	padding: 2rem 1rem;
+	box-sizing: border-box;
+	text-align: center;
+	color: var(--text);
+}
+
+.loader-gif {
+	height: var(--loader-gif-height);
+	width: auto;
+	max-width: 100%;
+	object-fit: contain;
+	user-select: none;
+	pointer-events: none;
+}
+
+.loader-text {
+	font-family: var(--body-font);
+	font-weight: normal;
+	font-size: var(--loader-text-size);
+	line-height: 1.2;
+	margin: 0;
+}

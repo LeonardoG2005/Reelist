@@ -4,6 +4,7 @@ const express = require("express");
 const session = require("express-session");
 const app = express();
 const path = require("path");
+const fs = require("fs");
 
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
@@ -112,6 +113,24 @@ app.use(async (req, res, next) => {
       res.locals.avatarUrl = "";
     }
   }
+  next();
+});
+
+// Se hace un sorteo con los gifs que estan en styles/assets/loaders c: 
+const LOADERS_DIR = path.join(__dirname, "./styles/assets/loaders");
+function getLoaderGifs() {
+  try {
+    return fs.readdirSync(LOADERS_DIR)
+      .filter(file => /\.(gif|webp)$/i.test(file))
+      .map(file => "/assets/loaders/" + encodeURIComponent(file));
+  } catch (error) {
+    return [];
+  }
+}
+
+app.use((req, res, next) => {
+  // "<" escapado para poder incrustar el JSON dentro de un <script> sin riesgos
+  res.locals.loaderGifsJson = JSON.stringify(getLoaderGifs()).replace(/</g, "\\u003c");
   next();
 });
 
@@ -883,13 +902,32 @@ function checkPassword(password, confirmPassword,req) {
    return errores;
 }
 
+// Cache en memoria de los detalles de TMDB: cambian muy poco y se piden una vez por item
+// cada vez que se abre o se cambia de lista. Se devuelve una COPIA porque quien llama
+// le agrega campos propios (wantStars) y no deben contaminar lo guardado.
+const ITEM_CACHE_TTL = 10 * 60 * 1000; // 10 minutos
+const ITEM_CACHE_MAX = 500;
+const itemCache = new Map();
+
 async function idToItem(id, type) {
+    const key = type + ":" + id;
+    const cached = itemCache.get(key);
+    if (cached && cached.expires > Date.now()) {
+        return { ...cached.data };
+    }
     try {
         const url = `${urldefault}/${type}/${id}?language=en-US`;
         const response = await fetch(url, tmdbOptions);
         const data = await response.json();
         data.type = type;
-        return data;
+        // solo se deben guardar respuestas buenas (nunca errores de TMDB)
+        if (response.ok && data.success !== false) {
+            if (itemCache.size >= ITEM_CACHE_MAX) {
+                itemCache.delete(itemCache.keys().next().value);
+            }
+            itemCache.set(key, { data, expires: Date.now() + ITEM_CACHE_TTL });
+        }
+        return { ...data };
     } catch (error) {
         console.error("Error fetching item by ID:", error);
         return null;
