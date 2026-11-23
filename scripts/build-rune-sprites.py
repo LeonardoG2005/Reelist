@@ -1,28 +1,6 @@
 """
-Genera los assets web del toggle de tema (runas Ingwaz / Sowilo) a partir de
-los originales en design/runes/.
-
-Por que existe:
-  - Los GIF originales NO tienen transparencia: traen un fondo casi negro
-    (con un damero tenue "horneado") y un encuadre 640x360 distinto al de los PNG.
-  - Un <img> GIF tampoco avisa cuando termina ni se reinicia de forma fiable.
-
-Que hace:
-  1. Quita el fondo de cada frame (luma-key + "unmultiply" desde negro, y el
-     disco de la runa siempre opaco) para que los brillos queden suaves.
-  2. Registra (escala + posicion) ambos GIF y ambos PNG contra un mismo
-     sistema de referencia, para que el primer/ultimo frame coincidan
-     exactamente con las runas estaticas (sin saltos ni cambios de tamano).
-  3. Exporta:
-       styles/assets/runes/rune-ingwaz-to-sowilo.webp  (sprite horizontal)
-       styles/assets/runes/rune-sowilo-to-ingwaz.webp  (sprite horizontal)
-       styles/assets/runes/rune-ingwaz.png             (estatica, mismo lienzo)
-       styles/assets/runes/rune-sowilo.png             (estatica, mismo lienzo)
-     e imprime el tamano de frame, numero de frames y duracion para el CSS/JS.
-
-Uso (solo herramienta de desarrollo, no es dependencia del proyecto):
-  python -m pip install pillow numpy
-  python scripts/build-rune-sprites.py
+Genera los sprites y runas estaticas del toggle de tema (styles/assets/runes/)
+a partir de design/runes/. Requiere: pip install pillow numpy
 """
 import json
 import os
@@ -35,13 +13,12 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "design", "runes")
 OUT = os.path.join(ROOT, "styles", "assets", "runes")
 
-DISK_PX = 100      # diametro (aprox.) del disco de la runa en el asset final
-BLACK_LEVEL = 14   # el damero del fondo del GIF llega hasta ~18
-KEY_RANGE = 90     # brillo (sobre el negro) a partir del cual un pixel es opaco
-EDGE_FADE = 10     # px: desvanece los bordes del GIF por si algun brillo toca el borde
+DISK_PX = 100
+BLACK_LEVEL = 14  # el fondo de los GIF no es transparente
+KEY_RANGE = 90
+EDGE_FADE = 10
 
 
-# ---------------------------------------------------------------- utilidades
 def load_gif(path):
     im = Image.open(path)
     frames, delays = [], []
@@ -56,13 +33,11 @@ def load_png(path):
 
 
 def disk_geometry(rgb, alpha=None):
-    """Centro y radio del disco (relleno morado oscuro + agujeros rellenados)."""
     r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
     fill = (b - g > 15) & (b > 28) & (np.maximum(np.maximum(r, g), b) < 110)
     if alpha is not None:
         fill &= alpha > 200
     h, w = fill.shape
-    # rellenar agujeros (el trazo de la runa dentro del disco) con flood fill desde fuera
     m = Image.fromarray((fill * 255).astype(np.uint8)).convert("L")
     pad = Image.new("L", (w + 2, h + 2), 0)
     pad.paste(m, (1, 1))
@@ -72,33 +47,27 @@ def disk_geometry(rgb, alpha=None):
     ys, xs = np.nonzero(fill)
     cx, cy = xs.mean(), ys.mean()
     r_eq = np.sqrt(fill.sum() / np.pi)
-    for _ in range(3):  # quedarse solo con la zona cercana al disco
+    for _ in range(3):
         yy, xx = np.mgrid[0:h, 0:w]
         near = solid & ((xx - cx) ** 2 + (yy - cy) ** 2 < (1.15 * r_eq) ** 2)
         ys, xs = np.nonzero(near)
         cx, cy = xs.mean(), ys.mean()
         r_eq = np.sqrt(near.sum() / np.pi)
-    # +0.5: coordenadas continuas (el pixel i cubre [i, i+1))
     return cx + 0.5, cy + 0.5, r_eq
 
 
 def key_frame(rgb, center, radius):
-    """RGB opaco con fondo casi negro -> RGBA premultiplicado (float, 0..255)."""
     h, w, _ = rgb.shape
     c = np.clip(rgb - BLACK_LEVEL, 0, None) * (255.0 / (255 - BLACK_LEVEL))
     m = c.max(axis=2)
     a_lum = np.clip(m / KEY_RANGE, 0, 1)
-    # disco de la runa: siempre opaco (su relleno es oscuro y si no quedaria translucido)
     yy, xx = np.mgrid[0:h, 0:w]
     d = np.sqrt((xx + 0.5 - center[0]) ** 2 + (yy + 0.5 - center[1]) ** 2)
     a_disk = np.clip(radius - d + 0.5, 0, 1)
-    # desvanecer bordes del lienzo original
     ex = np.minimum(xx + 0.5, w - xx - 0.5)
     ey = np.minimum(yy + 0.5, h - yy - 0.5)
     edge = np.clip(np.minimum(ex, ey) / EDGE_FADE, 0, 1)
     a = np.maximum(a_lum, a_disk) * edge
-    # premultiplicado: fuera del disco el color observado (sobre negro) ya es premultiplicado;
-    # dentro del disco se usa el color original completo.
     prem = c * (1 - a_disk[..., None]) + rgb * a_disk[..., None]
     prem = np.minimum(prem, 255 * a[..., None]) * edge[..., None]
     return np.dstack([prem, a * 255])
@@ -110,17 +79,10 @@ def png_premul(rgba):
 
 
 def warp(prem, src_anchor, s, offset, out_size, k, out_center):
-    """
-    Lleva una imagen RGBA premultiplicada (float) a un lienzo de salida.
-    Un punto P_src se ubica en el espacio de referencia como
-        P_ref = out_center + offset + s * (P_src - src_anchor)
-    y el lienzo de salida cubre P_ref con escala k (px de salida por px de referencia),
-    centrado en out_center.
-    Supermuestreo x2 + reduccion LANCZOS para evitar aliasing.
-    """
+    # P_ref = out_center + offset + s * (P_src - src_anchor)
     W, H = out_size
     SS = 2
-    e = k * s  # px de salida por px de origen
+    e = k * s
     src = prem
     h, w, _ = src.shape
     fx = fy = 1.0
@@ -131,8 +93,6 @@ def warp(prem, src_anchor, s, offset, out_size, k, out_center):
         chans = [Image.fromarray(src[..., i].astype(np.float32), "F").resize((nw, nh), Image.LANCZOS)
                  for i in range(4)]
         src = np.dstack([np.asarray(ch, dtype=np.float32) for ch in chans])
-    # salida (supermuestreada) u -> referencia -> origen (escalado por fx, fy)
-    # P_src = anchor + ((u/SS - W/2)/k - offset)/s
     a_x = 1.0 / (SS * k * s) * fx
     c_x = (src_anchor[0] + ((-W / 2) / k - offset[0]) / s) * fx
     a_y = 1.0 / (SS * k * s) * fy
@@ -156,9 +116,7 @@ def to_image(prem):
     return Image.fromarray(arr, "RGBA")
 
 
-# ---------------------------------------------------------------- registro
 def fit(src_prem, src_anchor, s0, ref_prem, ref_size, C):
-    """Busca (s, ox, oy) que mejor alinea src con ref en el espacio de referencia (k=1)."""
     W, H = ref_size
 
     def err(p):
@@ -189,7 +147,6 @@ def main():
     ingwaz = load_png(os.path.join(SRC, "rune-ingwaz-dark.png"))
     sowilo = load_png(os.path.join(SRC, "rune-sowilo-light.png"))
 
-    # geometria del disco (fija durante cada animacion: se promedian primer y ultimo frame)
     ga = [disk_geometry(a_frames[0]), disk_geometry(a_frames[-1])]
     gb = [disk_geometry(b_frames[0]), disk_geometry(b_frames[-1])]
     CA = (np.mean([g[0] for g in ga]), np.mean([g[1] for g in ga]))
@@ -200,7 +157,6 @@ def main():
     gs = disk_geometry(sowilo[..., :3], sowilo[..., 3])
     print("disk A", CA, rA, "disk B", CB, rB, "png ingwaz", gi, "png sowilo", gs)
 
-    # espacio de referencia = GIF A (Ingwaz -> Sowilo) en su resolucion nativa
     win = int(round(2 * 1.3 * rA))
     ref_size = (win, win)
     C = CA
@@ -210,18 +166,16 @@ def main():
 
     refA0, refA29 = ref_of(a_frames[0]), ref_of(a_frames[-1])
 
-    # B -> A (ingwaz final de B con ingwaz inicial de A; sowilo inicial de B con sowilo final de A)
+    # alinear todo contra el GIF Ingwaz -> Sowilo
     pb1, e1 = fit(key_frame(b_frames[-1], CB, rB), CB, rA / rB, refA0, ref_size, C)
     pb2, e2 = fit(key_frame(b_frames[0], CB, rB), CB, rA / rB, refA29, ref_size, C)
     pB = [(x + y) / 2 for x, y in zip(pb1, pb2)]
     print("fit B->A", pb1, e1, pb2, e2, "->", pB)
 
-    # PNG -> A
     pI, eI = fit(png_premul(ingwaz), gi[:2], rA / gi[2], refA0, ref_size, C)
     pS, eS = fit(png_premul(sowilo), gs[:2], rA / gs[2], refA29, ref_size, C)
     print("fit ingwaz", pI, eI, "fit sowilo", pS, eS)
 
-    # lienzo final: union simetrica de todo el contenido animado alrededor del disco
     k = DISK_PX / (2 * rA)
     big = (int(4 * rA), int(4 * rA))
     ext_x = ext_y = 0.0
@@ -258,7 +212,6 @@ def main():
     to_image(st_i).save(os.path.join(OUT, "rune-ingwaz.png"), optimize=True)
     to_image(st_s).save(os.path.join(OUT, "rune-sowilo.png"), optimize=True)
 
-    # control de costuras: diferencia media (sobre negro) entre estaticas y extremos
     def diff(x, y):
         return float(np.abs(x[..., :3] - y[..., :3]).mean())
 

@@ -58,9 +58,6 @@ html(lang="en")
             path(d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7")
             path(d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6")
       div.nav-actions
-        //- Toggle de tema con runas: Ingwaz = modo oscuro, Sowilo = modo claro.
-        //- La runa estatica visible la decide el CSS segun html.dark (sin parpadeo al cargar);
-        //- la animacion es un sprite (ver scripts/build-rune-sprites.py) controlado por JS.
         button#themeToggle.rune-toggle(
           type="button"
           aria-label="Toggle color theme"
@@ -110,11 +107,10 @@ html(lang="en")
         var anim = btn.querySelector('.rune-anim');
         var FRAMES = parseInt(btn.getAttribute('data-frames'), 10) || 30;
         var DURATION = parseInt(btn.getAttribute('data-duration'), 10) || 3000;
-        var FADE_IN = 120;   // ms: la animacion aparece sobre la runa estatica
-        var FADE_OUT = 200;  // ms: la animacion se disuelve sobre la nueva runa estatica
+        var FADE_OUT = 200;
         var SPRITES = {
-          light: btn.getAttribute('data-sprite-to-light'), // Ingwaz -> Sowilo
-          dark: btn.getAttribute('data-sprite-to-dark')    // Sowilo -> Ingwaz
+          light: btn.getAttribute('data-sprite-to-light'),
+          dark: btn.getAttribute('data-sprite-to-dark')
         };
         var reduceMotion = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
         var canAnimate = typeof anim.animate === 'function';
@@ -131,7 +127,6 @@ html(lang="en")
           btn.title = label;
         }
 
-        // Precarga + decodificacion del sprite: la promesa se reutiliza (el primer clic no espera si ya cargo)
         function loadSprite(target) {
           if (!cache[target]) {
             cache[target] = new Promise(function (resolve, reject) {
@@ -169,15 +164,13 @@ html(lang="en")
 
         function play(target, token) {
           anim.style.backgroundImage = 'url("' + SPRITES[target] + '")';
-          // Animacion nueva en cada clic: siempre arranca en el frame 0 (reproduccion fiable)
           playing = anim.animate(
             [{ backgroundPosition: '0% 0' }, { backgroundPosition: '100% 0' }],
             { duration: DURATION, easing: 'steps(' + FRAMES + ', jump-none)', fill: 'forwards' }
           );
           btn.classList.add('is-playing');
 
-          // El tema cambia justo a mitad de la animacion. Se mide con el reloj de la propia
-          // animacion (currentTime), no con un setTimeout, para que coincida con el frame visible.
+          // el tema cambia a mitad de la animacion
           var switched = false;
           var HALF = DURATION / 2;
           function switchTheme() {
@@ -195,20 +188,19 @@ html(lang="en")
           function finish() {
             if (done || token !== run) return;
             done = true;
-            switchTheme(); // por si requestAnimationFrame no corrio (p. ej. pestana en segundo plano)
-            // Nueva runa estatica debajo (identica al ultimo frame) y la animacion se disuelve encima.
+            switchTheme();
             btn.classList.add('is-ending');
             btn.classList.remove('is-playing');
             btn.removeAttribute('data-from');
             setTimeout(function () { if (token === run) reset(); }, FADE_OUT + 30);
           }
           playing.finished.then(finish, function () {});
-          // Red de seguridad (p. ej. pestana en segundo plano): nunca queda atascado
+          // por si la pestaña esta en segundo plano
           setTimeout(finish, DURATION + 500);
         }
 
         btn.addEventListener('click', function () {
-          if (busy) return; // ignora clics mientras dura la transicion
+          if (busy) return;
           var target = isDark() ? 'light' : 'dark';
           if (reduceMotion.matches || !canAnimate) {
             applyTheme(target);
@@ -217,22 +209,19 @@ html(lang="en")
           busy = true;
           btn.setAttribute('aria-busy', 'true');
           var token = ++run;
-          // La runa de partida se mantiene visible hasta que la animacion la cubre
           btn.setAttribute('data-from', target === 'dark' ? 'light' : 'dark');
           withTimeout(loadSprite(target), 2500).then(
             function () { if (token === run) play(target, token); },
-            function () { if (token === run) { reset(); applyTheme(target); } } // sin sprite: cambio directo
+            function () { if (token === run) { reset(); applyTheme(target); } }
           );
         });
 
-        // Si el navegador restaura la pagina desde la cache (atras/adelante), sin estados a medias
         window.addEventListener('pageshow', function (e) {
           if (e.persisted) { run++; reset(); updateLabel(); }
         });
 
         updateLabel();
 
-        // Precarga en reposo para que la primera transicion sea instantanea
         function preload() {
           if (reduceMotion.matches || !canAnimate) return;
           loadSprite('light').catch(function () {});

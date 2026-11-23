@@ -138,16 +138,11 @@ nav a {
     object-fit: cover;
 }
 
-/* ---------- Toggle de tema con runas (Ingwaz = oscuro, Sowilo = claro) ----------
-   Todas las capas (2 runas estaticas + sprite animado) comparten exactamente la misma
-   caja (.rune-stage), y los assets estan generados sobre el mismo lienzo con el disco
-   centrado (scripts/build-rune-sprites.py): cambiar de capa no mueve ni escala nada.
-   El boton mide lo que mide el disco; el lienzo es mas grande para que los destellos
-   de la animacion se salgan del boton sin afectar el layout del header. */
+/* Toggle de tema: Ingwaz (oscuro) / Sowilo (claro) */
 .rune-toggle {
-    --rune-size: 2.5rem;           /* diametro visible del disco */
-    --rune-frame-w: 2.08;          /* ancho del frame / diametro del disco (FRAME_W / DISK_PX) */
-    --rune-frame-h: 1.78;          /* alto del frame / diametro del disco (FRAME_H / DISK_PX) */
+    --rune-size: 2.5rem;
+    --rune-frame-w: 2.08;
+    --rune-frame-h: 1.78;
     --rune-glow: rgba(139, 92, 246, 0.6);
     position: relative;
     flex: 0 0 auto;
@@ -213,7 +208,6 @@ html:not(.dark) .rune-toggle {
     -webkit-user-drag: none;
 }
 
-/* Runa del tema actual: depende solo de html.dark (lo pone el script del <head>) */
 .rune-static {
     opacity: 0;
     transition: opacity 0.25s ease;
@@ -224,8 +218,6 @@ html:not(.dark) .rune-static-sowilo {
     opacity: 1;
 }
 
-/* Durante la transicion la runa de partida queda fijada (el tema cambia a mitad de la
-   animacion) hasta que la animacion, que empieza en esa misma runa, la cubre. */
 .rune-toggle[data-from="dark"] .rune-static-ingwaz,
 .rune-toggle[data-from="light"] .rune-static-sowilo {
     opacity: 1;
@@ -236,7 +228,6 @@ html:not(.dark) .rune-static-sowilo {
     opacity: 0;
 }
 
-/* Sprite horizontal de N frames: background-position 0% = primer frame, 100% = ultimo */
 .rune-anim {
     opacity: 0;
     background-repeat: no-repeat;
@@ -244,8 +235,6 @@ html:not(.dark) .rune-static-sowilo {
     background-position: 0% 0;
 }
 
-/* Reproduciendo: la animacion aparece encima de la runa (frame 0 == runa estatica)
-   y la estatica se oculta cuando la animacion ya esta opaca, nunca a la vez. */
 .rune-toggle.is-playing .rune-anim {
     opacity: 1;
     transition: opacity 120ms linear;
@@ -256,8 +245,6 @@ html:not(.dark) .rune-static-sowilo {
     transition: opacity 0s linear 120ms;
 }
 
-/* Terminando: la nueva runa estatica aparece debajo al instante (es igual al ultimo
-   frame) y la animacion se disuelve encima, sin hueco ni destello. */
 .rune-toggle.is-ending .rune-static {
     transition: none;
 }

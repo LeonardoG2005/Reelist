@@ -281,9 +281,7 @@ app.post("/login", async function (req, res) {
     if (userf != null) {
         if (await bcrypt.compare(req.body.password, userf.password)) {
             req.session.userid = userf._id;
-            // Post/Redirect/Get: se guarda la sesion y se redirige a /primary. Asi la pagina se
-            // genera en una peticion ya autenticada (el middleware del nav carga la foto de perfil)
-            // y recargar no reenvia el formulario de login.
+            // redirect para que el nav ya cargue la foto de perfil
             return req.session.save(function (err) {
                 if (err) {
                     console.error("Error saving session:", err);
@@ -346,7 +344,6 @@ app.post("/signup", async function(req, res) {
             listName: "Personal List",
             items: []
         });
-        // Igual que en /login: redirigir a /primary en una peticion ya autenticada
         return req.session.save(function (err) {
             if (err) {
                 console.error("Error saving session:", err);
