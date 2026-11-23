@@ -224,8 +224,8 @@ html:not(.dark) .rune-static-sowilo {
     opacity: 1;
 }
 
-/* Al hacer clic el tema cambia al instante, pero la runa de partida sigue visible
-   hasta que la animacion (que empieza en esa misma runa) la cubre. */
+/* Durante la transicion la runa de partida queda fijada (el tema cambia a mitad de la
+   animacion) hasta que la animacion, que empieza en esa misma runa, la cubre. */
 .rune-toggle[data-from="dark"] .rune-static-ingwaz,
 .rune-toggle[data-from="light"] .rune-static-sowilo {
     opacity: 1;
