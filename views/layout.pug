@@ -58,34 +58,21 @@ html(lang="en")
             path(d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7")
             path(d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6")
       div.nav-actions
-        button#themeToggle.theme-toggle(type="button", aria-label="Toggle dark mode")
-          svg.icon.icon-tabler.icons-tabler-outline.icon-tabler-moon.theme-icon.theme-icon-moon(
-            xmlns="http://www.w3.org/2000/svg"
-            width="22"
-            height="22"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          )
-            path(stroke="none" d="M0 0h24v24H0z" fill="none")
-            path(d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454l0 .008")
-          svg.icon.icon-tabler.icons-tabler-outline.icon-tabler-sun.theme-icon.theme-icon-sun(
-            xmlns="http://www.w3.org/2000/svg"
-            width="22"
-            height="22"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          )
-            path(stroke="none" d="M0 0h24v24H0z" fill="none")
-            path(d="M8 12a4 4 0 1 0 8 0a4 4 0 1 0 -8 0")
-            path(d="M3 12h1m8 -9v1m8 8h1m-9 8v1m-6.4 -15.4l.7 .7m12.1 -.7l-.7 .7m0 11.4l.7 .7m-12.1 -.7l-.7 .7")
+        //- Toggle de tema con runas: Ingwaz = modo oscuro, Sowilo = modo claro.
+        //- La runa estatica visible la decide el CSS segun html.dark (sin parpadeo al cargar);
+        //- la animacion es un sprite (ver scripts/build-rune-sprites.py) controlado por JS.
+        button#themeToggle.rune-toggle(
+          type="button"
+          aria-label="Toggle color theme"
+          data-sprite-to-light="/assets/runes/rune-ingwaz-to-sowilo.webp"
+          data-sprite-to-dark="/assets/runes/rune-sowilo-to-ingwaz.webp"
+          data-frames="30"
+          data-duration="3000"
+        )
+          span.rune-stage(aria-hidden="true")
+            img.rune-static.rune-static-ingwaz(src="/assets/runes/rune-ingwaz.png", alt="", draggable="false", decoding="async")
+            img.rune-static.rune-static-sowilo(src="/assets/runes/rune-sowilo.png", alt="", draggable="false", decoding="async")
+            span.rune-anim
         if userid
           a(type="button", href="/account", class="account")
             if avatarUrl
@@ -117,9 +104,130 @@ html(lang="en")
 
     script.
       (function () {
+        var root = document.documentElement;
         var btn = document.getElementById('themeToggle');
-        btn.addEventListener('click', function () {
-          var dark = document.documentElement.classList.toggle('dark');
+        if (!btn) return;
+        var anim = btn.querySelector('.rune-anim');
+        var FRAMES = parseInt(btn.getAttribute('data-frames'), 10) || 30;
+        var DURATION = parseInt(btn.getAttribute('data-duration'), 10) || 3000;
+        var FADE_IN = 120;   // ms: la animacion aparece sobre la runa estatica
+        var FADE_OUT = 200;  // ms: la animacion se disuelve sobre la nueva runa estatica
+        var SPRITES = {
+          light: btn.getAttribute('data-sprite-to-light'), // Ingwaz -> Sowilo
+          dark: btn.getAttribute('data-sprite-to-dark')    // Sowilo -> Ingwaz
+        };
+        var reduceMotion = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
+        var canAnimate = typeof anim.animate === 'function';
+        var busy = false;
+        var run = 0;
+        var playing = null;
+        var cache = {};
+
+        function isDark() { return root.classList.contains('dark'); }
+
+        function updateLabel() {
+          var label = isDark() ? 'Switch to light mode' : 'Switch to dark mode';
+          btn.setAttribute('aria-label', label);
+          btn.title = label;
+        }
+
+        // Precarga + decodificacion del sprite: la promesa se reutiliza (el primer clic no espera si ya cargo)
+        function loadSprite(target) {
+          if (!cache[target]) {
+            cache[target] = new Promise(function (resolve, reject) {
+              var img = new Image();
+              img.onload = function () {
+                if (img.decode) img.decode().then(resolve, resolve); else resolve();
+              };
+              img.onerror = function () { delete cache[target]; reject(new Error('sprite')); };
+              img.src = SPRITES[target];
+            });
+          }
+          return cache[target];
+        }
+
+        function withTimeout(promise, ms) {
+          return Promise.race([promise, new Promise(function (_, reject) { setTimeout(reject, ms); })]);
+        }
+
+        function applyTheme(target) {
+          var dark = target === 'dark';
+          root.classList.toggle('dark', dark);
           try { localStorage.setItem('theme', dark ? 'dark' : 'light'); } catch (e) {}
+          updateLabel();
+        }
+
+        function reset() {
+          if (playing) { try { playing.cancel(); } catch (e) {} playing = null; }
+          btn.classList.remove('is-playing', 'is-ending');
+          btn.removeAttribute('data-from');
+          anim.style.backgroundImage = '';
+          anim.style.opacity = '';
+          btn.removeAttribute('aria-busy');
+          busy = false;
+        }
+
+        function play(target, token) {
+          anim.style.backgroundImage = 'url("' + SPRITES[target] + '")';
+          // Animacion nueva en cada clic: siempre arranca en el frame 0 (reproduccion fiable)
+          playing = anim.animate(
+            [{ backgroundPosition: '0% 0' }, { backgroundPosition: '100% 0' }],
+            { duration: DURATION, easing: 'steps(' + FRAMES + ', jump-none)', fill: 'forwards' }
+          );
+          btn.classList.add('is-playing');
+
+          var done = false;
+          function finish() {
+            if (done || token !== run) return;
+            done = true;
+            // Nueva runa estatica debajo (identica al ultimo frame) y la animacion se disuelve encima.
+            // El tema ya cambio al hacer clic; aqui solo se suelta la runa "anterior".
+            btn.classList.add('is-ending');
+            btn.classList.remove('is-playing');
+            btn.removeAttribute('data-from');
+            setTimeout(function () { if (token === run) reset(); }, FADE_OUT + 30);
+          }
+          playing.finished.then(finish, function () {});
+          // Red de seguridad (p. ej. pestana en segundo plano): nunca queda atascado
+          setTimeout(finish, DURATION + 500);
+        }
+
+        btn.addEventListener('click', function () {
+          if (busy) return; // ignora clics mientras dura la transicion
+          var target = isDark() ? 'light' : 'dark';
+          if (reduceMotion.matches || !canAnimate) {
+            applyTheme(target);
+            return;
+          }
+          busy = true;
+          btn.setAttribute('aria-busy', 'true');
+          var token = ++run;
+          // La runa del tema anterior se mantiene visible hasta que arranca la animacion...
+          btn.setAttribute('data-from', target === 'dark' ? 'light' : 'dark');
+          // ...pero el tema cambia al instante, como antes.
+          applyTheme(target);
+          withTimeout(loadSprite(target), 2500).then(
+            function () { if (token === run) play(target, token); },
+            function () { if (token === run) reset(); } // sin sprite: solo cambia la runa
+          );
+        });
+
+        // Si el navegador restaura la pagina desde la cache (atras/adelante), sin estados a medias
+        window.addEventListener('pageshow', function (e) {
+          if (e.persisted) { run++; reset(); updateLabel(); }
+        });
+
+        updateLabel();
+
+        // Precarga en reposo para que la primera transicion sea instantanea
+        function preload() {
+          if (reduceMotion.matches || !canAnimate) return;
+          loadSprite('light').catch(function () {});
+          loadSprite('dark').catch(function () {});
+        }
+        if (document.readyState === 'complete') setTimeout(preload, 300);
+        else window.addEventListener('load', function () {
+          if (window.requestIdleCallback) requestIdleCallback(preload, { timeout: 2000 });
+          else setTimeout(preload, 300);
         });
       })();

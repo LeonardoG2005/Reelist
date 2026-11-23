@@ -138,54 +138,139 @@ nav a {
     object-fit: cover;
 }
 
-.theme-toggle {
-    width: auto;
-    min-width: 2.5rem;
-    height: 2.5rem;
-    margin: 0;
-    padding: 0.35rem 0.75rem;
-    border-radius: 0.5rem;
-    background-color: var(--panel);
-    color: var(--blanco);
-    border: 1px solid var(--primario);
-    font-size: 0.85rem;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+/* ---------- Toggle de tema con runas (Ingwaz = oscuro, Sowilo = claro) ----------
+   Todas las capas (2 runas estaticas + sprite animado) comparten exactamente la misma
+   caja (.rune-stage), y los assets estan generados sobre el mismo lienzo con el disco
+   centrado (scripts/build-rune-sprites.py): cambiar de capa no mueve ni escala nada.
+   El boton mide lo que mide el disco; el lienzo es mas grande para que los destellos
+   de la animacion se salgan del boton sin afectar el layout del header. */
+.rune-toggle {
+    --rune-size: 2.5rem;           /* diametro visible del disco */
+    --rune-frame-w: 2.08;          /* ancho del frame / diametro del disco (FRAME_W / DISK_PX) */
+    --rune-frame-h: 1.78;          /* alto del frame / diametro del disco (FRAME_H / DISK_PX) */
+    --rune-glow: rgba(139, 92, 246, 0.6);
+    position: relative;
+    flex: 0 0 auto;
+    width: var(--rune-size);
+    height: var(--rune-size);
+    margin: 0 0.25rem;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
     cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
 }
 
-.theme-toggle:hover {
-    background-color: var(--primario);
+html:not(.dark) .rune-toggle {
+    --rune-glow: rgba(34, 197, 94, 0.55);
 }
 
-.theme-toggle .theme-icon {
+.rune-toggle:hover,
+.rune-toggle:active {
+    background: transparent;
+}
+
+.rune-toggle:focus {
+    outline: none;
+}
+
+.rune-toggle:focus-visible {
+    outline: 2px solid var(--acento);
+    outline-offset: 3px;
+}
+
+.rune-toggle[aria-busy="true"] {
+    cursor: progress;
+}
+
+.rune-stage {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: calc(var(--rune-size) * var(--rune-frame-w));
+    height: calc(var(--rune-size) * var(--rune-frame-h));
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    transition: filter 0.25s ease;
+}
+
+.rune-toggle:hover .rune-stage,
+.rune-toggle:focus-visible .rune-stage {
+    filter: drop-shadow(0 0 0.35rem var(--rune-glow));
+}
+
+.rune-static,
+.rune-anim {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
     margin: 0;
     padding: 0;
-    display: block;
-    width: 1.3rem;
-    height: 1.3rem;
-    opacity: 0.4;
-    transition: opacity 0.2s ease;
+    user-select: none;
+    -webkit-user-drag: none;
 }
 
-/* Sun is the "active" icon in light mode */
-.theme-toggle .theme-icon-sun {
-    color: #fbbf24;
+/* Runa del tema actual: depende solo de html.dark (lo pone el script del <head>) */
+.rune-static {
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}
+
+html.dark .rune-static-ingwaz,
+html:not(.dark) .rune-static-sowilo {
     opacity: 1;
 }
 
-.theme-toggle .theme-icon-moon {
-    color: var(--acento);
-}
-
-/* Moon becomes the "active" icon in dark mode */
-html.dark .theme-toggle .theme-icon-sun {
-    opacity: 0.4;
-}
-
-html.dark .theme-toggle .theme-icon-moon {
+/* Al hacer clic el tema cambia al instante, pero la runa de partida sigue visible
+   hasta que la animacion (que empieza en esa misma runa) la cubre. */
+.rune-toggle[data-from="dark"] .rune-static-ingwaz,
+.rune-toggle[data-from="light"] .rune-static-sowilo {
     opacity: 1;
+}
+
+.rune-toggle[data-from="dark"] .rune-static-sowilo,
+.rune-toggle[data-from="light"] .rune-static-ingwaz {
+    opacity: 0;
+}
+
+/* Sprite horizontal de N frames: background-position 0% = primer frame, 100% = ultimo */
+.rune-anim {
+    opacity: 0;
+    background-repeat: no-repeat;
+    background-size: calc(var(--rune-frames, 30) * 100%) 100%;
+    background-position: 0% 0;
+}
+
+/* Reproduciendo: la animacion aparece encima de la runa (frame 0 == runa estatica)
+   y la estatica se oculta cuando la animacion ya esta opaca, nunca a la vez. */
+.rune-toggle.is-playing .rune-anim {
+    opacity: 1;
+    transition: opacity 120ms linear;
+}
+
+.rune-toggle.is-playing .rune-static {
+    opacity: 0;
+    transition: opacity 0s linear 120ms;
+}
+
+/* Terminando: la nueva runa estatica aparece debajo al instante (es igual al ultimo
+   frame) y la animacion se disuelve encima, sin hueco ni destello. */
+.rune-toggle.is-ending .rune-static {
+    transition: none;
+}
+
+.rune-toggle.is-ending .rune-anim {
+    opacity: 0;
+    transition: opacity 200ms ease-out;
+}
+
+@media (max-width: 600px) {
+    .rune-toggle {
+        --rune-size: 2.25rem;
+    }
 }
 
 svg {
