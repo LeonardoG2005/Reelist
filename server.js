@@ -281,8 +281,16 @@ app.post("/login", async function (req, res) {
     if (userf != null) {
         if (await bcrypt.compare(req.body.password, userf.password)) {
             req.session.userid = userf._id;
-            const data = await loadPrimaryData(req.session.userid);
-            res.render("primary", data);
+            // Post/Redirect/Get: se guarda la sesion y se redirige a /primary. Asi la pagina se
+            // genera en una peticion ya autenticada (el middleware del nav carga la foto de perfil)
+            // y recargar no reenvia el formulario de login.
+            return req.session.save(function (err) {
+                if (err) {
+                    console.error("Error saving session:", err);
+                    return res.status(500).render("login", { error: "Could not start your session. Please try again.", username: req.body.username });
+                }
+                res.redirect(303, "/primary");
+            });
         } else {
             res.render("login", { error: "Incorrect password.", username: req.body.username });
         }
@@ -338,8 +346,14 @@ app.post("/signup", async function(req, res) {
             listName: "Personal List",
             items: []
         });
-        const data = await loadPrimaryData(req.session.userid);
-        res.render("primary", data);
+        // Igual que en /login: redirigir a /primary en una peticion ya autenticada
+        return req.session.save(function (err) {
+            if (err) {
+                console.error("Error saving session:", err);
+                return res.status(500).render("signup", { errores: ["Your account was created, but we could not start your session. Please log in."], email: req.body.email, username: req.body.username });
+            }
+            res.redirect(303, "/primary");
+        });
     }
 });
 
