@@ -176,12 +176,27 @@ html(lang="en")
           );
           btn.classList.add('is-playing');
 
+          // El tema cambia justo a mitad de la animacion. Se mide con el reloj de la propia
+          // animacion (currentTime), no con un setTimeout, para que coincida con el frame visible.
+          var switched = false;
+          var HALF = DURATION / 2;
+          function switchTheme() {
+            if (switched || token !== run) return;
+            switched = true;
+            applyTheme(target);
+          }
+          (function watchMidpoint() {
+            if (switched || token !== run || !playing) return;
+            if ((playing.currentTime || 0) >= HALF) switchTheme();
+            else requestAnimationFrame(watchMidpoint);
+          })();
+
           var done = false;
           function finish() {
             if (done || token !== run) return;
             done = true;
+            switchTheme(); // por si requestAnimationFrame no corrio (p. ej. pestana en segundo plano)
             // Nueva runa estatica debajo (identica al ultimo frame) y la animacion se disuelve encima.
-            // El tema ya cambio al hacer clic; aqui solo se suelta la runa "anterior".
             btn.classList.add('is-ending');
             btn.classList.remove('is-playing');
             btn.removeAttribute('data-from');
@@ -202,13 +217,11 @@ html(lang="en")
           busy = true;
           btn.setAttribute('aria-busy', 'true');
           var token = ++run;
-          // La runa del tema anterior se mantiene visible hasta que arranca la animacion...
+          // La runa de partida se mantiene visible hasta que la animacion la cubre
           btn.setAttribute('data-from', target === 'dark' ? 'light' : 'dark');
-          // ...pero el tema cambia al instante, como antes.
-          applyTheme(target);
           withTimeout(loadSprite(target), 2500).then(
             function () { if (token === run) play(target, token); },
-            function () { if (token === run) reset(); } // sin sprite: solo cambia la runa
+            function () { if (token === run) { reset(); applyTheme(target); } } // sin sprite: cambio directo
           );
         });
 
